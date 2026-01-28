@@ -11,6 +11,8 @@ from automation_service.models.schemas import (
     HealthResponse,
     LoginRequest,
     LoginResponse,
+    SimpleLoginRequest,
+    SimpleLoginResponse,
 )
 from automation_service.services.browser import BrowserManager
 from automation_service.services.club_virtual import ClubVirtualService
@@ -77,6 +79,52 @@ async def readiness(
 # =============================================================================
 # Authentication
 # =============================================================================
+
+
+@router.post("/auth/login/simple", response_model=SimpleLoginResponse, tags=["Authentication"])
+async def simple_login(
+    request: SimpleLoginRequest,
+    club_virtual: Annotated[ClubVirtualService, Depends(get_club_virtual_service)],
+) -> SimpleLoginResponse:
+    """
+    Simple login to Club Virtual IASD.
+
+    Just validates credentials and returns success/failure message.
+    Does not maintain a session.
+    """
+    try:
+        response = await club_virtual.login(
+            username=request.username,
+            password=request.password,
+            club_id=None,
+            save_session=False,
+        )
+
+        # Close the session immediately after validation
+        if response.session_id:
+            await club_virtual.browser_manager.close_context(response.session_id)
+
+        return SimpleLoginResponse(
+            success=True,
+            message=f"¡Bienvenido! Login exitoso para {response.user.full_name or request.username}",
+            username=request.username,
+            user_name=response.user.full_name if response.user else None,
+        )
+
+    except LoginError as e:
+        logger.warning("Login failed", error=e.message, details=e.details)
+        return SimpleLoginResponse(
+            success=False,
+            message="Credenciales inválidas. Usuario o contraseña incorrectos.",
+            username=request.username,
+        )
+
+    except AutomationError as e:
+        logger.error("Automation error during login", error=e.message)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error en el sistema: {e.message}",
+        ) from e
 
 
 @router.post("/auth/login", response_model=LoginResponse, tags=["Authentication"])

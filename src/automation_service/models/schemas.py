@@ -51,8 +51,54 @@ class HealthResponse(BaseModel):
 # =============================================================================
 
 
+class SimpleLoginRequest(BaseModel):
+    """Simple login request - just credentials."""
+
+    username: str = Field(..., min_length=1, description="Club Virtual username")
+    password: str = Field(..., min_length=1, description="Club Virtual password")
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "username": "usuario123",
+                    "password": "contraseña123",
+                }
+            ]
+        }
+    }
+
+
+class SimpleLoginResponse(BaseModel):
+    """Simple login response - just success/failure message."""
+
+    success: bool = Field(..., description="Whether login was successful")
+    message: str = Field(..., description="Human-readable result message")
+    username: str = Field(..., description="Username that was used")
+    user_name: str | None = Field(None, description="User's full name if login successful")
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "success": True,
+                    "message": "¡Bienvenido! Login exitoso para Juan Pérez",
+                    "username": "juanperez123",
+                    "user_name": "Juan Pérez",
+                },
+                {
+                    "success": False,
+                    "message": "Credenciales inválidas. Usuario o contraseña incorrectos.",
+                    "username": "usuario123",
+                    "user_name": None,
+                },
+            ]
+        }
+    }
+
+
 class LoginRequest(BaseModel):
-    """Login request payload."""
+    """Full login request payload with options."""
 
     username: str = Field(..., min_length=1, description="Club Virtual username")
     password: str = Field(..., min_length=1, description="Club Virtual password")
@@ -61,7 +107,7 @@ class LoginRequest(BaseModel):
 
 
 class LoginResponse(BaseModel):
-    """Login response payload."""
+    """Full login response payload with session and user info."""
 
     success: bool
     message: str

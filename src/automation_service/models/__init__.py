@@ -8,6 +8,8 @@ from automation_service.models.schemas import (
     HealthResponse,
     LoginRequest,
     LoginResponse,
+    SimpleLoginRequest,
+    SimpleLoginResponse,
     TaskResult,
     UserProfile,
 )
@@ -20,6 +22,8 @@ __all__ = [
     "HealthResponse",
     "LoginRequest",
     "LoginResponse",
+    "SimpleLoginRequest",
+    "SimpleLoginResponse",
     "TaskResult",
     "UserProfile",
 ]

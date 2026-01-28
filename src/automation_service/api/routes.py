@@ -104,11 +104,18 @@ async def simple_login(
         if response.session_id:
             await club_virtual.browser_manager.close_context(response.session_id)
 
+        # Handle case where user profile extraction failed
+        user_name = None
+        if response.user:
+            user_name = response.user.full_name
+
+        display_name = user_name or request.username
+
         return SimpleLoginResponse(
             success=True,
-            message=f"¡Bienvenido! Login exitoso para {response.user.full_name or request.username}",
+            message=f"¡Bienvenido! Login exitoso para {display_name}",
             username=request.username,
-            user_name=response.user.full_name if response.user else None,
+            user_name=user_name,
         )
 
     except LoginError as e:

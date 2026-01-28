@@ -51,6 +51,14 @@ class HealthResponse(BaseModel):
 # =============================================================================
 
 
+class ClubType(str, Enum):
+    """Types of clubs in Club Virtual."""
+
+    CONQUISTADORES = "Conquistadores"
+    GUIAS_MAYORES = "Guías Mayores"
+    AVENTUREROS = "Aventureros"
+
+
 class SimpleLoginRequest(BaseModel):
     """Simple login request - just credentials."""
 
@@ -98,12 +106,44 @@ class SimpleLoginResponse(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    """Full login request payload with options."""
+    """Full login request payload with club selection options."""
 
     username: str = Field(..., min_length=1, description="Club Virtual username")
     password: str = Field(..., min_length=1, description="Club Virtual password")
-    club_id: int | None = Field(None, description="Club ID to select after login")
+    club_type: ClubType | None = Field(
+        None,
+        description="Type of club: Conquistadores, Guías Mayores, or Aventureros",
+    )
+    club_name: str | None = Field(
+        None,
+        description="Name of the club to select (partial match supported)",
+    )
+    club_id: int | None = Field(
+        None,
+        description="Direct club ID (alternative to club_type + club_name)",
+    )
     save_session: bool = Field(True, description="Save session for reuse")
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "username": "usuario123",
+                    "password": "contraseña123",
+                    "club_type": "Aventureros",
+                    "club_name": "Club Peniel",
+                    "save_session": True,
+                },
+                {
+                    "username": "usuario123",
+                    "password": "contraseña123",
+                    "club_type": "Conquistadores",
+                    "club_name": "Leones de Judá",
+                    "save_session": True,
+                },
+            ]
+        }
+    }
 
 
 class LoginResponse(BaseModel):
@@ -137,7 +177,9 @@ class ClubInfo(BaseModel):
 
     id: int
     name: str
+    club_type: str | None = None  # e.g., "Aventureros", "Conquistadores", "Guías Mayores"
     role: str  # e.g., "Miembro", "Director", etc.
+    full_text: str | None = None  # Original full text from the page
 
 
 # =============================================================================

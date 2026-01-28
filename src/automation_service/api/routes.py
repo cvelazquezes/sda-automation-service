@@ -133,7 +133,13 @@ async def login(
     club_virtual: Annotated[ClubVirtualService, Depends(get_club_virtual_service)],
 ) -> LoginResponse:
     """
-    Login to Club Virtual IASD.
+    Login to Club Virtual IASD with club selection.
+
+    You can specify the club to select in two ways:
+    1. By club_id (direct selection if you know the ID)
+    2. By club_type + club_name (searches for matching club)
+
+    Club types: Conquistadores, Guías Mayores, Aventureros
 
     Returns session ID that can be used for subsequent requests.
     """
@@ -142,6 +148,8 @@ async def login(
             username=request.username,
             password=request.password,
             club_id=request.club_id,
+            club_type=request.club_type.value if request.club_type else None,
+            club_name=request.club_name,
             save_session=request.save_session,
         )
         return response
@@ -150,7 +158,7 @@ async def login(
         logger.warning("Login failed", error=e.message, details=e.details)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=e.message,
+            detail={"message": e.message, "details": e.details},
         ) from e
 
     except AutomationError as e:

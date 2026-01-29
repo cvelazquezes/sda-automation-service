@@ -1,0 +1,52 @@
+---
+description: Coding standards and conventions for this service
+alwaysApply: true
+---
+
+# Coding Standards
+
+## General Principles
+
+- **Clean Code**: Meaningful names, small functions, single responsibility
+- **Documentation**: Document public APIs and complex logic
+- **Testing**: Unit tests for logic, integration tests for APIs
+- **Error Handling**: Always handle errors appropriately
+
+## API Conventions
+
+### REST Endpoints
+- Use verb-based for operations: `/api/v1/scrape/profile`
+- POST for all scraping operations
+- Version prefix: `/api/v1/`
+
+### Error Responses
+```json
+{
+  "error": {
+    "code": "EXTRACTION_ERROR",
+    "message": "Human readable message",
+    "details": [...]
+  }
+}
+```
+
+## Health Endpoints
+
+Every service MUST implement:
+- `GET /health/live` - Liveness
+- `GET /health/ready` - Readiness
+- `GET /metrics` - Prometheus metrics
+
+## Python Code Style
+
+- **Type hints required** - All functions must have type hints
+- **Async/await** - Use async patterns for I/O operations
+- **Pydantic models** - Use for request/response validation
+- **Structured logging** - Use structlog for JSON logging
+
+## Browser Automation Rules
+
+- **Context isolation** - Fresh context per request
+- **Resource cleanup** - Always close browser contexts
+- **Timeout handling** - Use generous timeouts
+- **Retry logic** - Implement for transient failures

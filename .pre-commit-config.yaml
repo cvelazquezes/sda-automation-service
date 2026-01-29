@@ -27,7 +27,6 @@ repos:
     rev: 24.1.1
     hooks:
       - id: black
-        language_version: python3.11
 
   # Python linting - Ruff (replaces flake8, isort, etc.)
   - repo: https://github.com/astral-sh/ruff-pre-commit

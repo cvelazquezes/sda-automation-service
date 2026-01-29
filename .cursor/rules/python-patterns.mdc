@@ -1,0 +1,143 @@
+---
+description: Python development patterns and conventions
+globs: "**/*.py"
+alwaysApply: false
+---
+
+# Python Patterns
+
+## Type Hints Required
+
+```python
+from typing import Optional, List
+from pydantic import BaseModel
+
+def process_data(input_data: InputModel) -> OutputModel:
+    """Process input and return result."""
+    ...
+```
+
+## Pydantic Models
+
+```python
+from pydantic import BaseModel, Field
+from datetime import datetime
+from uuid import UUID
+
+class TaskRequest(BaseModel):
+    user_id: UUID
+    task_type: str = Field(..., min_length=1)
+    parameters: dict = Field(default_factory=dict)
+
+class TaskResponse(BaseModel):
+    task_id: UUID
+    status: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+```
+
+## Async/Await Pattern
+
+```python
+async def fetch_data(url: str) -> dict:
+    async with httpx.AsyncClient() as client:
+        response = await client.get(url)
+        response.raise_for_status()
+        return response.json()
+```
+
+## Browser Context Management
+
+```python
+async def extract_with_browser(request: ScrapeRequest) -> dict:
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(
+            headless=settings.BROWSER_HEADLESS,
+            args=['--no-sandbox', '--disable-setuid-sandbox']
+        )
+        context = await browser.new_context(
+            user_agent=get_random_user_agent(),
+            viewport={'width': 1920, 'height': 1080}
+        )
+        page = await context.new_page()
+
+        try:
+            result = await perform_extraction(page, request)
+            return result
+        finally:
+            await context.close()
+            await browser.close()
+```
+
+## Resource Limiting
+
+```python
+from asyncio import Semaphore
+
+MAX_CONCURRENT_BROWSERS = 5
+browser_semaphore = Semaphore(MAX_CONCURRENT_BROWSERS)
+
+async def safe_extract(request: ScrapeRequest) -> dict:
+    async with browser_semaphore:
+        return await extract_with_browser(request)
+```
+
+## Error Handling
+
+```python
+class AutomationError(Exception):
+    """Base automation error."""
+    def __init__(self, message: str, details: dict = None):
+        self.message = message
+        self.details = details or {}
+        super().__init__(message)
+
+class LoginFailedError(AutomationError):
+    """Login failed."""
+    pass
+
+class ExtractionError(AutomationError):
+    """Data extraction failed."""
+    pass
+```
+
+## Retry Logic
+
+```python
+from tenacity import retry, stop_after_attempt, wait_exponential
+
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=2, max=10),
+    retry=retry_if_exception_type((TimeoutError, ConnectionError))
+)
+async def extract_with_retry(page: Page, extractor: BaseExtractor) -> dict:
+    return await extractor.extract()
+```
+
+## Structured Logging
+
+```python
+import structlog
+
+logger = structlog.get_logger()
+
+async def extract_profile(request: ScrapeRequest) -> dict:
+    logger.info('extraction_started',
+                user_id=str(request.user_id),
+                extraction_type='profile')
+
+    try:
+        result = await perform_extraction(request)
+        logger.info('extraction_completed',
+                    user_id=str(request.user_id),
+                    duration_ms=result['duration_ms'])
+        return result
+    except Exception as e:
+        logger.error('extraction_failed',
+                     user_id=str(request.user_id),
+                     error=str(e))
+        raise
+```

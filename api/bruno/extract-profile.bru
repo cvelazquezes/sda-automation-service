@@ -1,0 +1,75 @@
+meta {
+  name: Extract - Profile Only
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/extract
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "username": "{{username}}",
+    "password": "{{password}}",
+    "club_type": "{{clubType}}",
+    "club_name": "{{clubName}}",
+    "include": [
+      "profile"
+    ]
+  }
+}
+
+docs {
+  # Extract Profile Only
+
+  Extract only user profile information from Club Virtual IASD.
+  Faster than combined extraction when you only need basic user data.
+
+  ## Use Cases
+
+  - User profile import during registration
+  - Profile data sync
+  - Verifying user information
+
+  ## Response Fields
+
+  ```json
+  {
+    "success": true,
+    "profile": {
+      "full_name": "Juan Pérez",
+      "email": "juan@email.com",
+      "birthday": "2015-03-15",
+      "age": 8,
+      "gender": "M",
+      "phone": "555-1234",
+      "address": "Calle Principal 123",
+      "city": "Lima",
+      "country": "Peru"
+    }
+  }
+  ```
+
+  ## Performance
+
+  - Average duration: 3-5 seconds
+  - Lighter than full extraction
+  - No session maintained after extraction
+}
+
+tests {
+  test("Status is 200", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+
+  test("Response has profile data", function() {
+    const body = res.getBody();
+    if (body.success) {
+      expect(body).to.have.property("profile");
+      expect(body.profile).to.have.property("full_name");
+    }
+  });
+}

@@ -1,0 +1,86 @@
+meta {
+  name: Extract - Specialties (Session-based)
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/sessions/{{sessionId}}/specialties
+  body: none
+  auth: none
+}
+
+vars:pre-request {
+  sessionId: replace-with-session-id-from-login
+}
+
+docs {
+  # Extract Specialties
+
+  Extract specialties/badges from user's Club Virtual dashboard.
+  **Requires an active session** from `/auth/login`.
+
+  ## Prerequisites
+
+  1. Call `POST /auth/login` first
+  2. Get `session_id` from response
+  3. Use that `session_id` here
+
+  ## Flow
+
+  ```
+  1. POST /auth/login → get session_id
+  2. GET /sessions/{session_id}/specialties → extract data
+  3. DELETE /sessions/{session_id} → cleanup
+  ```
+
+  ## Response
+
+  ```json
+  {
+    "success": true,
+    "specialties": [
+      {
+        "name": "Primeros Auxilios",
+        "category": "Salud",
+        "completed": true,
+        "date_completed": "2024-01-15"
+      },
+      {
+        "name": "Campamento",
+        "category": "Naturaleza",
+        "completed": false
+      }
+    ]
+  }
+  ```
+
+  ## Error Response
+
+  ```json
+  {
+    "detail": "Session not found or expired"
+  }
+  ```
+
+  ## Notes
+
+  - This endpoint demonstrates session-based automation
+  - Use it as a template for adding new automation flows
+  - Clean up sessions when done to free resources
+}
+
+tests {
+  test("Status is 200 or 404", function() {
+    const status = res.getStatus();
+    expect([200, 404, 400]).to.include(status);
+  });
+
+  test("Successful response has specialties", function() {
+    if (res.getStatus() === 200) {
+      const body = res.getBody();
+      expect(body).to.have.property("success");
+      expect(body).to.have.property("specialties");
+    }
+  });
+}

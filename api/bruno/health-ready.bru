@@ -1,0 +1,59 @@
+meta {
+  name: Health - Readiness
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/health/ready
+  body: none
+  auth: none
+}
+
+docs {
+  # Readiness Probe
+
+  Kubernetes readiness probe endpoint. Returns 200 only if browser is initialized and ready.
+
+  ## Response (Ready)
+
+  ```json
+  {
+    "status": "ready",
+    "browser": true
+  }
+  ```
+
+  ## Response (Not Ready)
+
+  Status: 503 Service Unavailable
+
+  ```json
+  {
+    "detail": "Browser not ready"
+  }
+  ```
+
+  ## Usage
+
+  - K8s uses this to determine if traffic should be routed to this pod
+  - Returns 200 only after Playwright browser is initialized
+  - Can temporarily return 503 during startup
+}
+
+tests {
+  test("Status is 200 or 503", function() {
+    const status = res.getStatus();
+    expect([200, 503]).to.include(status);
+  });
+
+  test("Response has correct structure", function() {
+    const body = res.getBody();
+    if (res.getStatus() === 200) {
+      expect(body).to.have.property("status", "ready");
+      expect(body).to.have.property("browser", true);
+    } else {
+      expect(body).to.have.property("detail");
+    }
+  });
+}

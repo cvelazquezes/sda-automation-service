@@ -1,0 +1,93 @@
+meta {
+  name: Session - Delete (Cleanup)
+  type: http
+  seq: 9
+}
+
+delete {
+  url: {{baseUrl}}/sessions/{{sessionId}}
+  body: none
+  auth: none
+}
+
+vars:pre-request {
+  sessionId: replace-with-session-id-from-login
+}
+
+docs {
+  # Delete Session
+
+  Close and delete a browser session to free resources.
+  **Always call this** when done with automation to prevent resource leaks.
+
+  ## Prerequisites
+
+  - `session_id` from `POST /auth/login`
+
+  ## Response
+
+  Status: 200 OK
+
+  ```json
+  {
+    "status": "deleted",
+    "session_id": "abc-123-def-456"
+  }
+  ```
+
+  ## Behavior
+
+  - Closes browser context
+  - Frees memory (~100-200MB per session)
+  - Removes session from registry
+  - Safe to call multiple times (idempotent)
+  - Safe to call on non-existent sessions
+
+  ## vs POST /auth/logout
+
+  | Endpoint | Action | Use Case |
+  |----------|--------|----------|
+  | DELETE /sessions/{id} | Close browser context only | Quick cleanup, no web logout |
+  | POST /auth/logout | Web logout + close context | Proper logout from website |
+
+  ## Best Practices
+
+  1. **Always cleanup**: Use `try/finally` pattern
+     ```python
+     session_id = login()
+     try:
+         data = extract(session_id)
+     finally:
+         delete_session(session_id)
+     ```
+
+  2. **Resource limits**: Max 5 concurrent sessions
+  3. **Memory management**: Each session uses ~100-200MB
+  4. **Timeout strategy**: Auto-cleanup after 30min idle (TODO)
+
+  ## Resource Impact
+
+  - Chromium browser instance: ~50-100MB
+  - Browser context: ~50-100MB
+  - Loaded pages: ~10-50MB per page
+  - Total per session: ~100-200MB
+
+  ## Use Cases
+
+  - End of automation workflow
+  - Error recovery (cleanup failed session)
+  - Batch processing cleanup
+  - Manual session management
+}
+
+tests {
+  test("Status is 200", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+
+  test("Response confirms deletion", function() {
+    const body = res.getBody();
+    expect(body).to.have.property("status", "deleted");
+    expect(body).to.have.property("session_id");
+  });
+}

@@ -1,0 +1,45 @@
+meta {
+  name: Health - Liveness
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/health/live
+  body: none
+  auth: none
+}
+
+docs {
+  # Liveness Probe
+
+  Kubernetes liveness probe endpoint. Returns 200 if the service process is running.
+
+  ## Response
+
+  ```json
+  {
+    "status": "alive"
+  }
+  ```
+
+  ## Usage
+
+  - K8s uses this to determine if container should be restarted
+  - Always returns 200 OK if service is running
+  - Does NOT check browser initialization
+}
+
+tests {
+  test("Status is 200", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+
+  test("Response has status field", function() {
+    expect(res.getBody()).to.have.property("status");
+  });
+
+  test("Status is alive", function() {
+    expect(res.getBody().status).to.equal("alive");
+  });
+}

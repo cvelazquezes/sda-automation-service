@@ -1,0 +1,97 @@
+meta {
+  name: Session - Check Status
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{baseUrl}}/sessions/{{sessionId}}
+  body: none
+  auth: none
+}
+
+vars:pre-request {
+  sessionId: replace-with-session-id-from-login
+}
+
+docs {
+  # Check Session Status
+
+  Verify if a session exists and is still active.
+  Use this before making automation calls to ensure session validity.
+
+  ## Prerequisites
+
+  - `session_id` from `POST /auth/login`
+
+  ## Response (Active Session)
+
+  Status: 200 OK
+
+  ```json
+  {
+    "session_id": "abc-123-def-456",
+    "active": true,
+    "pages": 1
+  }
+  ```
+
+  ## Response (Session Not Found)
+
+  Status: 404 Not Found
+
+  ```json
+  {
+    "detail": "Session not found"
+  }
+  ```
+
+  ## Use Cases
+
+  - Verify session before automation call
+  - Check if session cleanup is needed
+  - Monitor active browser pages
+
+  ## Session Lifecycle
+
+  Sessions can be in these states:
+  - **Active**: Session exists, browser context open, can perform automation
+  - **Not Found**: Session closed/deleted or never existed
+
+  ## Best Practices
+
+  1. Check session before long-running operations
+  2. Don't rely on old session IDs (implement refresh)
+  3. Clean up sessions after use (DELETE endpoint)
+  4. Monitor `pages` count (memory leak indicator)
+
+  ## Notes
+
+  - Sessions expire when browser context is closed
+  - Max 5 concurrent sessions (resource limit)
+  - Each session consumes ~100-200MB RAM
+}
+
+tests {
+  test("Status is 200 or 404", function() {
+    const status = res.getStatus();
+    expect([200, 404]).to.include(status);
+  });
+
+  test("Active session has correct fields", function() {
+    if (res.getStatus() === 200) {
+      const body = res.getBody();
+      expect(body).to.have.property("session_id");
+      expect(body).to.have.property("active", true);
+      expect(body).to.have.property("pages");
+      expect(body.pages).to.be.a("number");
+    }
+  });
+
+  test("Not found has detail", function() {
+    if (res.getStatus() === 404) {
+      const body = res.getBody();
+      expect(body).to.have.property("detail");
+    }
+  });
+}

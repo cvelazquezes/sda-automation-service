@@ -1,0 +1,358 @@
+# Automation Service - AI Agent Rules
+
+## Language & Framework
+- Language: Python 3.12+
+- Framework: FastAPI with async/await
+- Browser: Playwright with Chromium
+- HTTP Client: httpx (async)
+- Logging: structlog (structured logging)
+- Validation: Pydantic v2 models
+
+## Architecture Patterns
+
+### Extractor Registry (Plugin Architecture)
+- Base class: `BaseExtractor` with `extract()` abstract method
+- Register extractors in `ExtractorRegistry` by name
+- Orchestrator pattern: `ExtractOrchestrator` coordinates login + extractors
+- Each extractor is independent and testable
+- Location: `services/extractors/`
+
+### Dependency Injection
+- Use FastAPI's `Depends()` for service injection
+- `BrowserManager` stored in `app.state` (singleton)
+- Services are stateless; all state in browser contexts
+
+### Error Hierarchy
+```python
+AutomationError (base)
+├── LoginError (401 errors)
+├── NavigationError (page load failures)
+└── ExtractionError (selector failures)
+```
+
+## Browser Automation Rules
+
+### ALWAYS Use async/await
+```python
+# ✅ CORRECT
+async def extract_data(page: Page) -> dict:
+    await page.goto(url)
+    await page.wait_for_selector("div.content")
+    text = await page.locator("h1").text_content()
+    return {"title": text}
+
+# ❌ WRONG - Missing await
+def extract_data(page: Page):
+    page.goto(url)  # This will fail!
+```
+
+### Browser Isolation (Critical)
+- Fresh `BrowserContext` per request/session
+- NEVER share contexts between users
+- NEVER persist cookies across sessions (unless explicit session management)
+- Clean up in `finally` blocks
+
+```python
+# ✅ CORRECT
+async def scrape():
+    context = None
+    try:
+        context = await browser_manager.create_context()
+        page = await context.new_page()
+        # ... automation
+    finally:
+        if context:
+            await context.close()
+
+# ❌ WRONG - No cleanup, resource leak
+async def scrape():
+    context = await browser_manager.create_context()
+    page = await context.new_page()
+    return data  # Context leaked!
+```
+
+### Retry with Backoff (tenacity)
+```python
+from tenacity import retry, stop_after_attempt, wait_exponential
+
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=2, max=10),
+    retry=retry_if_exception_type(TimeoutError)
+)
+async def extract_with_retry(page: Page) -> dict:
+    await page.wait_for_selector("div.data", timeout=5000)
+    return await extract_data(page)
+```
+
+### Resource Limits
+- Max 5 concurrent browser sessions (Chromium is memory-heavy)
+- Implement semaphore in `BrowserManager`
+- Timeout all operations (page.goto, wait_for_selector)
+- Default timeout: 30 seconds
+
+### Wait Strategies (NEVER use sleep)
+```python
+# ✅ CORRECT - Explicit waits
+await page.wait_for_selector("div.loaded", state="visible")
+await page.wait_for_load_state("networkidle")
+await page.locator("button").wait_for(state="enabled")
+
+# ❌ WRONG - Brittle timing
+await asyncio.sleep(5)  # Never do this!
+```
+
+### Screenshot on Failure
+```python
+try:
+    await page.goto(url)
+except Exception as e:
+    screenshot_path = f"screenshots/error_{session_id}.png"
+    await page.screenshot(path=screenshot_path)
+    logger.error("Navigation failed", error=str(e), screenshot=screenshot_path)
+    raise
+```
+
+## Security & Privacy
+
+### NEVER Log Sensitive Data
+```python
+# ✅ CORRECT
+logger.info("Login attempted", username=username[:3]+"***")
+
+# ❌ WRONG - Leaks credentials
+logger.info("Login attempted", username=username, password=password)
+logger.debug("Extracted data", data=user_data)  # May contain PII
+```
+
+### Credential Handling
+- Accept encrypted credentials in requests
+- Decrypt only in memory, never persist
+- Use environment variables for encryption keys
+- NEVER commit credentials to git
+
+## Code Style & Type Hints
+
+### Type Hints Everywhere
+```python
+# ✅ CORRECT
+async def extract_profile(page: Page) -> dict[str, Any]:
+    name: str | None = await page.locator("h1").text_content()
+    age: int = int(await page.locator("span.age").text_content())
+    return {"name": name, "age": age}
+
+# ❌ WRONG - Missing types
+async def extract_profile(page):
+    name = await page.locator("h1").text_content()
+    return {"name": name}
+```
+
+### Pydantic Models
+```python
+from pydantic import BaseModel, Field
+
+class ExtractRequest(BaseModel):
+    username: str = Field(..., min_length=1)
+    password: str = Field(..., min_length=1)
+    club_id: int | None = None
+    include: list[str] = Field(default_factory=lambda: ["profile", "tasks"])
+```
+
+### Error Handling in Routes
+```python
+@router.post("/extract")
+async def extract_data(request: ExtractRequest) -> ExtractResponse:
+    try:
+        result = await orchestrator.extract(**request.model_dump())
+        return result
+    except LoginError as e:
+        raise HTTPException(status_code=401, detail=e.message) from e
+    except AutomationError as e:
+        raise HTTPException(status_code=400, detail=e.message) from e
+```
+
+## Testing
+
+### Mock Playwright
+```python
+import pytest
+from unittest.mock import AsyncMock
+
+@pytest.fixture
+async def mock_page():
+    page = AsyncMock()
+    page.goto = AsyncMock()
+    page.locator.return_value.text_content = AsyncMock(return_value="Test")
+    return page
+
+@pytest.mark.asyncio
+async def test_extractor(mock_page):
+    extractor = ProfileExtractor(mock_page)
+    result = await extractor.extract()
+    assert result["name"] == "Test"
+```
+
+### Test Extractors Independently
+- Unit test each extractor with mocked pages
+- Integration tests with real browser (mark as slow)
+- Use `pytest.mark.asyncio` for async tests
+
+## Performance
+
+### Concurrent Operations
+```python
+import asyncio
+
+# ✅ Run independent operations in parallel
+profile, tasks = await asyncio.gather(
+    profile_extractor.extract(),
+    tasks_extractor.extract(),
+)
+
+# ❌ Sequential when could be parallel
+profile = await profile_extractor.extract()
+tasks = await tasks_extractor.extract()
+```
+
+### Resource Cleanup Checklist
+1. Close pages: `await page.close()`
+2. Close contexts: `await context.close()`
+3. Close browser on shutdown: `await browser.close()`
+4. Remove from session registry
+5. Delete screenshots older than 24h
+
+## Common Patterns
+
+### Base Extractor Implementation
+```python
+from abc import ABC, abstractmethod
+from playwright.async_api import Page
+
+class BaseExtractor(ABC):
+    def __init__(self, page: Page):
+        self.page = page
+
+    @abstractmethod
+    async def extract(self) -> dict[str, Any]:
+        """Extract data from the current page."""
+        pass
+
+    async def safe_get_text(self, selector: str) -> str | None:
+        """Safely extract text, return None if not found."""
+        try:
+            element = await self.page.query_selector(selector)
+            if element:
+                return (await element.text_content() or "").strip()
+        except Exception:
+            pass
+        return None
+```
+
+### Extractor Registry
+```python
+class ExtractorRegistry:
+    def __init__(self):
+        self._extractors: dict[str, type[BaseExtractor]] = {}
+
+    def register(self, name: str, extractor_class: type[BaseExtractor]) -> None:
+        self._extractors[name] = extractor_class
+
+    def create(self, name: str, page: Page) -> BaseExtractor:
+        if name not in self._extractors:
+            raise ValueError(f"Unknown extractor: {name}")
+        return self._extractors[name](page)
+```
+
+### Session Management
+```python
+class BrowserManager:
+    def __init__(self, max_sessions: int = 5):
+        self._contexts: dict[str, BrowserContext] = {}
+        self._semaphore = asyncio.Semaphore(max_sessions)
+
+    async def create_context(self, session_id: str) -> BrowserContext:
+        async with self._semaphore:
+            context = await self.browser.new_context()
+            self._contexts[session_id] = context
+            return context
+
+    async def close_context(self, session_id: str) -> None:
+        context = self._contexts.pop(session_id, None)
+        if context:
+            await context.close()
+```
+
+## Linting & Code Quality
+
+- Use Ruff for linting (configured in pyproject.toml)
+- Line length: 120 characters
+- Complexity limit: 10 (McCabe)
+- Run `ruff check` before committing
+- Run `mypy` for type checking
+- Run `pytest` with coverage
+
+## Documentation
+
+- Docstrings: Google style
+- API endpoint docstrings: Include examples, prerequisites, flow
+- Comment complex selectors with HTML structure
+- Document all retry strategies and timeouts
+
+## Club Virtual IASD Specifics
+
+### Login Flow
+1. Navigate to `https://clubvirtual.adventistas.org/login`
+2. Fill credentials: `input[name="username"]`, `input[name="password"]`
+3. Submit form: `button[type="submit"]`
+4. Handle club selection if multiple clubs
+5. Wait for dashboard: `div.dashboard` or similar
+
+### Common Selectors
+- Profile name: `h1.profile-name` or `.user-name`
+- Classes: `.class-card` or `div.curso-activo`
+- Progress: `.progress-percentage` or `span.progreso`
+- Logout button: `a[href*="logout"]` or button with "Cerrar Sesión"
+
+### Error Messages (Spanish)
+- Invalid credentials: "Usuario o contraseña incorrectos"
+- Club not found: "No se encontró el club especificado"
+- Session expired: "Sesión expirada"
+
+## Environment Variables
+
+```bash
+# Service
+PORT=8089
+LOG_LEVEL=INFO
+ENVIRONMENT=development
+
+# Browser
+BROWSER_HEADLESS=true
+BROWSER_TIMEOUT=30000
+PLAYWRIGHT_BROWSER_CHANNEL=chromium
+
+# Resources
+MAX_CONCURRENT_SESSIONS=5
+SCREENSHOT_RETENTION_HOURS=24
+
+# Security
+ENCRYPTION_KEY=<base64-encoded-key>
+```
+
+## Git Workflow
+
+- Branch naming: `feature/extractor-name` or `fix/issue-description`
+- Commit messages: Conventional Commits format
+- Pre-commit hooks: ruff, mypy, pytest (fast only)
+- NEVER commit: screenshots/, sessions/, .env
+
+## Adding New Extractors
+
+1. Create `services/extractors/my_extractor.py`
+2. Inherit from `BaseExtractor`
+3. Implement `async def extract() -> dict`
+4. Register in `services/extractors/__init__.py`
+5. Add to `ExtractOrchestrator.list_extractors()`
+6. Create unit tests in `tests/extractors/test_my_extractor.py`
+7. Add Bruno API collection example in `api/bruno/extract-my-data.bru`
+8. Update README with new extractor documentation

@@ -1,0 +1,166 @@
+meta {
+  name: Session - Create (Full Login)
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{baseUrl}}/auth/login
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "username": "{{username}}",
+    "password": "{{password}}",
+    "club_type": "{{clubType}}",
+    "club_name": "{{clubName}}",
+    "save_session": true
+  }
+}
+
+script:post-response {
+  if (res.getStatus() === 200) {
+    const body = res.getBody();
+    bru.setVar("sessionId", body.session_id);
+  }
+}
+
+docs {
+  # Create Session (Full Login)
+
+  Perform full login to Club Virtual IASD with club selection and session management.
+  Use this when you need to maintain a session for subsequent automation tasks.
+
+  ## Club Selection Options
+
+  ### 1. By club_type + club_name (Recommended)
+  ```json
+  {
+    "username": "user",
+    "password": "pass",
+    "club_type": "Aventureros",
+    "club_name": "Peniel",
+    "save_session": true
+  }
+  ```
+
+  ### 2. By club_id (Direct selection)
+  ```json
+  {
+    "username": "user",
+    "password": "pass",
+    "club_id": 7037,
+    "save_session": true
+  }
+  ```
+
+  ### 3. Auto-select first club
+  ```json
+  {
+    "username": "user",
+    "password": "pass",
+    "save_session": true
+  }
+  ```
+
+  ## Club Types
+
+  - `Conquistadores` - Pathfinders (ages 10-15)
+  - `Guías Mayores` - Master Guides (adults)
+  - `Aventureros` - Adventurers (ages 6-9)
+
+  ## Response
+
+  ```json
+  {
+    "success": true,
+    "session_id": "abc-123-def-456",
+    "clubs": [
+      {
+        "id": 7037,
+        "name": "Peniel",
+        "club_type": "Aventureros",
+        "district": "Lima Central",
+        "union": "Unión Peruana del Sur"
+      }
+    ],
+    "selected_club": {
+      "id": 7037,
+      "name": "Peniel",
+      "club_type": "Aventureros"
+    },
+    "user": {
+      "full_name": "Juan Pérez",
+      "email": "juan@email.com"
+    },
+    "screenshot_path": "/screenshots/login_abc-123.png"
+  }
+  ```
+
+  ## Next Steps
+
+  After getting `session_id`, you can:
+  1. GET `/sessions/{session_id}/tasks-and-reports` - Extract activities
+  2. GET `/sessions/{session_id}/specialties` - Extract specialties
+  3. DELETE `/sessions/{session_id}` - Cleanup when done
+
+  ## Session Management
+
+  - `save_session: true` → Keeps session for later use
+  - `save_session: false` → Closes session after login
+  - Sessions consume browser resources (max 5 concurrent)
+  - Always cleanup sessions when done
+
+  ## Error Responses
+
+  ### Invalid Credentials (401)
+  ```json
+  {
+    "detail": {
+      "message": "Login failed: Invalid credentials",
+      "details": "Could not login with provided credentials"
+    }
+  }
+  ```
+
+  ### Club Not Found (401)
+  ```json
+  {
+    "detail": {
+      "message": "Club not found",
+      "details": "No club matching 'Peniel' of type 'Aventureros'"
+    }
+  }
+  ```
+
+  ## Notes
+
+  - Bruno automatically saves `session_id` to collection variable
+  - Use `{{sessionId}}` in subsequent requests
+}
+
+tests {
+  test("Status is 200 or 401", function() {
+    const status = res.getStatus();
+    expect([200, 401, 500]).to.include(status);
+  });
+
+  test("Successful login has session_id", function() {
+    if (res.getStatus() === 200) {
+      const body = res.getBody();
+      expect(body).to.have.property("session_id");
+      expect(body.session_id).to.be.a("string");
+      expect(body).to.have.property("clubs");
+      expect(body.clubs).to.be.an("array");
+    }
+  });
+
+  test("Session ID is saved to variable", function() {
+    if (res.getStatus() === 200) {
+      const sessionId = bru.getVar("sessionId");
+      expect(sessionId).to.be.a("string");
+    }
+  });
+}

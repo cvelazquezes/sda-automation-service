@@ -1,0 +1,112 @@
+meta {
+  name: Extract - Tasks & Reports (Activities)
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/sessions/{{sessionId}}/tasks-and-reports
+  body: none
+  auth: none
+}
+
+vars:pre-request {
+  sessionId: replace-with-session-id-from-login
+}
+
+docs {
+  # Extract Tasks and Reports
+
+  Extract active classes and task completion progress from "Mis tareas y reportes".
+  **Requires an active session** from `/auth/login`.
+
+  ## Prerequisites
+
+  1. Call `POST /auth/login` with `save_session: true`
+  2. Get `session_id` from response
+  3. Use that `session_id` here
+
+  ## Flow
+
+  ```
+  1. POST /auth/login → get session_id
+  2. GET /sessions/{session_id}/tasks-and-reports → extract progress
+  3. DELETE /sessions/{session_id} → cleanup
+  ```
+
+  ## Response
+
+  ```json
+  {
+    "success": true,
+    "message": "Se encontraron 2 clases activas (1 lista para investidura)",
+    "session_id": "abc-123-def",
+    "active_classes": [
+      {
+        "name": "Abejas",
+        "completion_percentage": 100.0,
+        "status": "Autorizado para investir",
+        "is_ready_for_investiture": true,
+        "image_url": "https://clubvirtual.adventistas.org/images/abejas.png",
+        "tasks": [
+          {
+            "requirement": "Decir de memoria el Voto de los Aventureros",
+            "completed": true
+          }
+        ]
+      },
+      {
+        "name": "Constructores",
+        "completion_percentage": 75.0,
+        "status": "En progreso",
+        "is_ready_for_investiture": false
+      }
+    ],
+    "total_classes": 2,
+    "overall_completion": 87.5
+  }
+  ```
+
+  ## Use Cases
+
+  - Progress tracking dashboard
+  - Investiture readiness check
+  - Class completion reports
+  - Parent/leader notifications
+
+  ## Notes
+
+  - Navigates to `/miembro/cursos-activos`
+  - Extracts class cards with progress bars
+  - Identifies ready-for-investiture classes
+}
+
+tests {
+  test("Status is 200 or 404", function() {
+    const status = res.getStatus();
+    expect([200, 404, 400]).to.include(status);
+  });
+
+  test("Successful response has active_classes", function() {
+    if (res.getStatus() === 200) {
+      const body = res.getBody();
+      expect(body).to.have.property("success", true);
+      expect(body).to.have.property("active_classes");
+      expect(body.active_classes).to.be.an("array");
+      expect(body).to.have.property("total_classes");
+      expect(body).to.have.property("overall_completion");
+    }
+  });
+
+  test("Classes have required fields", function() {
+    if (res.getStatus() === 200) {
+      const classes = res.getBody().active_classes;
+      if (classes.length > 0) {
+        const firstClass = classes[0];
+        expect(firstClass).to.have.property("name");
+        expect(firstClass).to.have.property("completion_percentage");
+        expect(firstClass).to.have.property("is_ready_for_investiture");
+      }
+    }
+  });
+}

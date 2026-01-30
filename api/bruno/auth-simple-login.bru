@@ -1,0 +1,134 @@
+meta {
+  name: Auth - Simple Login (Credential Validation)
+  type: http
+  seq: 10
+}
+
+post {
+  url: {{baseUrl}}/auth/login/simple
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "username": "{{username}}",
+    "password": "{{password}}"
+  }
+}
+
+docs {
+  # Simple Login (Credential Validation)
+
+  Quick credential validation for Club Virtual IASD.
+  Use when you just need to verify if credentials are valid, without session management.
+
+  ## Use Cases
+
+  - User authentication in your app
+  - Credential validation before storing
+  - Quick login verification
+  - Check if account exists
+
+  ## Request
+
+  ```json
+  {
+    "username": "user123",
+    "password": "password123"
+  }
+  ```
+
+  ## Response (Success)
+
+  Status: 200 OK
+
+  ```json
+  {
+    "success": true,
+    "message": "¡Bienvenido! Login exitoso para Juan Pérez",
+    "username": "user123",
+    "user_name": "Juan Pérez"
+  }
+  ```
+
+  ## Response (Invalid Credentials)
+
+  Status: 200 OK (Note: Returns 200, check `success` field)
+
+  ```json
+  {
+    "success": false,
+    "message": "Credenciales inválidas. Usuario o contraseña incorrectos.",
+    "username": "user123",
+    "user_name": null
+  }
+  ```
+
+  ## Response (System Error)
+
+  Status: 500 Internal Server Error
+
+  ```json
+  {
+    "detail": "Error en el sistema: Browser timeout"
+  }
+  ```
+
+  ## Flow
+
+  1. Opens browser (headless)
+  2. Attempts login with credentials
+  3. Returns success/failure immediately
+  4. Closes browser session (no persistence)
+
+  ## vs POST /auth/login
+
+  | Feature | Simple Login | Full Login |
+  |---------|-------------|------------|
+  | Validates credentials | ✅ | ✅ |
+  | Selects club | ❌ | ✅ |
+  | Returns session_id | ❌ | ✅ |
+  | Maintains session | ❌ | ✅ |
+  | Speed | Fast (~2-3s) | Slower (~4-6s) |
+  | Use case | Authentication | Automation |
+
+  ## Notes
+
+  - Does NOT select a club
+  - Does NOT maintain session state
+  - Session auto-closes after validation
+  - Returns Spanish messages (Club Virtual is Spanish)
+  - `user_name` may be null if profile extraction fails
+}
+
+tests {
+  test("Status is 200 or 500", function() {
+    const status = res.getStatus();
+    expect([200, 500]).to.include(status);
+  });
+
+  test("Response has success field", function() {
+    const body = res.getBody();
+    expect(body).to.have.property("success");
+    expect(body.success).to.be.a("boolean");
+  });
+
+  test("Response has message", function() {
+    const body = res.getBody();
+    expect(body).to.have.property("message");
+    expect(body.message).to.be.a("string");
+  });
+
+  test("Response has username", function() {
+    const body = res.getBody();
+    expect(body).to.have.property("username");
+  });
+
+  test("Success response has user_name", function() {
+    const body = res.getBody();
+    if (body.success) {
+      expect(body).to.have.property("user_name");
+    }
+  });
+}

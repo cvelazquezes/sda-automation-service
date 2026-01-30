@@ -1,0 +1,136 @@
+meta {
+  name: Extract - Combined (All Data)
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/extract
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "username": "{{username}}",
+    "password": "{{password}}",
+    "club_type": "{{clubType}}",
+    "club_name": "{{clubName}}",
+    "include": [
+      "profile",
+      "tasks"
+    ]
+  }
+}
+
+docs {
+  # Combined Data Extraction
+
+  Extract multiple data types from Club Virtual IASD in a single API call.
+  This is the **recommended endpoint** for most use cases.
+
+  ## Flow
+
+  1. Login with credentials
+  2. Select club (by type/name or ID)
+  3. Extract requested data (profile, tasks, etc.)
+  4. Cleanup session automatically
+
+  ## Request Body
+
+  ```json
+  {
+    "username": "user123",
+    "password": "encrypted-or-plain",
+    "club_type": "Aventureros",      // Optional: "Conquistadores", "Guías Mayores", "Aventureros"
+    "club_name": "Peniel",           // Optional: Partial match supported
+    "club_id": 7037,                 // Optional: Direct club ID selection
+    "include": ["profile", "tasks"]  // Optional: Defaults to all available
+  }
+  ```
+
+  ## Available Extractors
+
+  - `profile`: User profile (name, email, birthday, age, etc.)
+  - `tasks`: Active classes and task completion progress
+
+  ## Response Structure
+
+  ```json
+  {
+    "success": true,
+    "message": "Club: Peniel (Aventureros) | Extracted: profile, tasks",
+    "login": {
+      "clubs": [...],
+      "selected_club": {
+        "id": 7037,
+        "name": "Peniel",
+        "club_type": "Aventureros"
+      }
+    },
+    "profile": {
+      "full_name": "Juan Pérez",
+      "email": "juan@email.com",
+      "birthday": "2015-03-15",
+      "age": 8,
+      "gender": "M",
+      "phone": "555-1234"
+    },
+    "tasks": {
+      "active_classes": [
+        {
+          "name": "Constructores",
+          "completion_percentage": 75.0,
+          "status": "En progreso",
+          "is_ready_for_investiture": false
+        }
+      ],
+      "total_classes": 1,
+      "overall_completion": 75.0
+    },
+    "extracted_at": "2024-01-28T15:30:00Z",
+    "screenshot_path": "/path/to/screenshot.png"
+  }
+  ```
+
+  ## Club Virtual Target
+
+  Target URL: {{clubVirtualUrl}}
+
+  ## Error Response
+
+  ```json
+  {
+    "success": false,
+    "message": "Login failed: Invalid credentials",
+    "errors": ["Invalid credentials"]
+  }
+  ```
+}
+
+tests {
+  test("Status is 200", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+
+  test("Response has success field", function() {
+    expect(res.getBody()).to.have.property("success");
+  });
+
+  test("If successful, has message", function() {
+    const body = res.getBody();
+    if (body.success) {
+      expect(body).to.have.property("message");
+      expect(body).to.have.property("login");
+      expect(body).to.have.property("extracted_at");
+    }
+  });
+
+  test("If failed, has errors", function() {
+    const body = res.getBody();
+    if (!body.success) {
+      expect(body).to.have.property("errors");
+      expect(body.errors).to.be.an("array");
+    }
+  });
+}
